@@ -1,0 +1,184 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
+using Autofac;
+using Microsoft.Extensions.Logging;
+using MyJetWallet.Sdk.Service.Tools;
+using System.Text.Json;
+using MyNoSqlServer.Abstractions;
+using Service.AssetsDictionary.Client;
+using Service.CoinMarketCapReader.Domain.Models;
+using Service.CoinMarketCapReader.Domain.Models.NoSql;
+
+namespace Service.CoinMarketCapReader.Jobs
+{
+    public class CMCUpdateJob : IStartable, IDisposable
+    { 
+        private const string CoinInfoUrl = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol=";
+        private const string CoinMarketUrl = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest";
+        private readonly MyTaskTimer _marketInfoTimer;
+        private readonly MyTaskTimer _coinInfoTimer;
+        private readonly MyTaskTimer _apiKeyTimer;
+
+        private readonly HttpClient _client;
+        private readonly ILogger<CMCUpdateJob> _logger;
+        private readonly IAssetsDictionaryClient _assetClient;
+        private readonly IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> _keyWriter;
+        private readonly IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> _timerWriter;
+        private readonly IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> _marketInfoWriter;
+
+        private Dictionary<string, MarketInfo> _marketInfo = new();
+        private Dictionary<string, bool> _apiKeys = new();
+        public CMCUpdateJob(ILogger<CMCUpdateJob> logger, 
+            IAssetsDictionaryClient assetClient, 
+            IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> keyWriter, IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> timerWriter, IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> marketInfoWriter)
+        {
+            _logger = logger;
+            _assetClient = assetClient;
+            _keyWriter = keyWriter;
+            _timerWriter = timerWriter;
+            _marketInfoWriter = marketInfoWriter;
+            _marketInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.MarketInfoTimerInSec), _logger, UpdateMarketInfo).DisableTelemetry();
+            _coinInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.CoinInfoTimerInMin), _logger, UpdateCoinInfo).DisableTelemetry();
+            _apiKeyTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromDays(1), _logger, ResetAllKeys).DisableTelemetry();
+
+            _client = new HttpClient();
+            _client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+        }
+        
+        private async Task UpdateCoinInfo()
+        {
+            var assets = _assetClient.GetAllAssets();
+            if (assets.Any())
+            {
+                var link = CoinInfoUrl;
+                foreach (var asset in assets)
+                {
+                    if (!link.EndsWith('='))
+                        link += ',';
+                    link += asset.Symbol;
+
+                    _marketInfo.TryAdd(asset.Symbol, new MarketInfo()
+                    {
+                        Asset = asset.Symbol,
+                        BrokerId = asset.BrokerId
+                    });
+                }
+
+                var response = await GetRequest<CMCCoinInfoResponse>(link);
+                
+                foreach (var (asset, info)  in response.Data)
+                {
+                    if (_marketInfo.TryGetValue(asset, out var marketInfo))
+                    {
+                        if(info.Urls.Website.Any())
+                            marketInfo.OfficialWebsiteUrl = info.Urls.Website.First();
+                        if(info.Urls.TechnicalDoc.Any())
+                            marketInfo.WhitepaperUrl = info.Urls.TechnicalDoc.First();
+                        
+                        await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
+                    }
+                }
+            }
+        }
+
+        private async Task UpdateMarketInfo()
+        {
+            var response = await GetRequest<CMCMarketInfoResponse>(CoinMarketUrl);
+            foreach (var (asset, marketInfo) in _marketInfo)
+            {
+                var info = response.Data.FirstOrDefault(p => p.Symbol == asset);
+                if (info != null)
+                {
+                    marketInfo.Price = info.Quote.QuoteValues.Price;
+                    marketInfo.Supply = info.TotalSupply;
+                    marketInfo.MarketCap = info.Quote.QuoteValues.MarketCap;
+                    marketInfo.Volume24 = info.Quote.QuoteValues.Volume24;
+                    await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
+                }
+            }
+        }
+
+        public async Task UpdateKeys()
+        {
+            var keys = await _keyWriter.GetAsync();
+            if (keys.Any())
+                _apiKeys = keys.ToDictionary(key=> key.ApiKey, value => true);
+        }
+        
+        private async Task SetApiKeys()
+        {
+            var keys = await _keyWriter.GetAsync();
+            if (keys.Any())
+                _apiKeys = keys.ToDictionary(key=> key.ApiKey, value => true);
+            else
+            {
+                _apiKeys = new Dictionary<string, bool>()
+                {
+                    {Program.Settings.CoinMarketCapApiKey, true}
+                };
+            }
+            _client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY",_apiKeys.First(pair => pair.Value).Key);
+        }
+
+        private async Task SetNextKey()
+        {
+            var failedKey = _apiKeys.First(pair => pair.Value == true);
+            _apiKeys[failedKey.Key] = false;
+            
+            if (_apiKeys.All(pair => pair.Value == false))
+            {
+                _logger.LogError("No working CoinMarketCap Api Keys left");
+                throw new Exception("No working CoinMarketCap Api Keys left");
+            }
+            
+            _client.DefaultRequestHeaders.Remove("X-CMC_PRO_API_KEY");
+            _client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY",_apiKeys.First(pair => pair.Value).Key);
+            _logger.LogInformation("CMC Api key {key} failed",failedKey.Key);
+        }
+
+        private async Task ResetAllKeys()
+        {
+            foreach (var apiKey in _apiKeys)
+            {
+                _apiKeys[apiKey.Key] = true;
+            }
+        }
+        
+        public async void Start()
+        {
+            await SetApiKeys();
+            _marketInfoTimer.Start();
+            _coinInfoTimer.Start();
+            _apiKeyTimer.Start();
+        }
+
+        public void Dispose()
+        {
+            _marketInfoTimer.Dispose();
+            _coinInfoTimer.Start();
+            _apiKeyTimer.Dispose();
+        }
+
+        private async Task<T> GetRequest<T>(string uri)
+        {
+            try
+            {
+                using HttpResponseMessage response = await _client.GetAsync(uri);
+                response.EnsureSuccessStatusCode();
+                var responseBody = await response.Content.ReadAsStreamAsync();
+                return await JsonSerializer.DeserializeAsync<T>(responseBody);
+            }
+            catch (Exception ex)
+            {
+                await SetNextKey();
+                throw;
+            }
+        }
+    }
+}
