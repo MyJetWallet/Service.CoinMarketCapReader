@@ -42,7 +42,7 @@ namespace Service.CoinMarketCapReader.Jobs
             _keyWriter = keyWriter;
             _timerWriter = timerWriter;
             _marketInfoWriter = marketInfoWriter;
-            _marketInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.MarketInfoTimerInSec), _logger, UpdateMarketInfo).DisableTelemetry();
+            _marketInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromSeconds(Program.Settings.MarketInfoTimerInSec), _logger, UpdateMarketInfo).DisableTelemetry();
             _coinInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.CoinInfoTimerInMin), _logger, UpdateCoinInfo).DisableTelemetry();
             _apiKeyTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromDays(1), _logger, ResetAllKeys).DisableTelemetry();
 
