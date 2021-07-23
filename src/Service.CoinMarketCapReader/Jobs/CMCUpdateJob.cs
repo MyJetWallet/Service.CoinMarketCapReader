@@ -152,6 +152,9 @@ namespace Service.CoinMarketCapReader.Jobs
         
         public async void Start()
         {
+            _marketInfo =
+                (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
+                    entity => entity.MarketInfo);
             await SetApiKeys();
             _marketInfoTimer.Start();
             _coinInfoTimer.Start();
