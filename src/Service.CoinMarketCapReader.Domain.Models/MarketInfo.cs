@@ -10,6 +10,8 @@ namespace Service.CoinMarketCapReader.Domain.Models
         public double Supply { get; set; }
         public double Volume24 { get; set; }
         public double Price { get; set; }
+        public string AboutLessTemplateId { get; set; }
+        public string AboutMoreTemplateId { get; set; }
 
     }
 }
