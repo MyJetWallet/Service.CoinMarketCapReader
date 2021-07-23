@@ -30,8 +30,6 @@ namespace Service.CoinMarketCapReader.Jobs
         private readonly IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> _keyWriter;
         private readonly IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> _timerWriter;
         private readonly IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> _marketInfoWriter;
-
-        private Dictionary<string, MarketInfo> _marketInfo = new();
         private Dictionary<string, bool> _apiKeys = new();
         public CMCUpdateJob(ILogger<CMCUpdateJob> logger, 
             IAssetsDictionaryClient assetClient, 
@@ -53,6 +51,9 @@ namespace Service.CoinMarketCapReader.Jobs
         
         private async Task UpdateCoinInfo()
         {
+            var marketInfos =
+                (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
+                    entity => entity.MarketInfo);
             var assets = _assetClient.GetAllAssets();
             if (assets.Any())
             {
@@ -63,7 +64,7 @@ namespace Service.CoinMarketCapReader.Jobs
                         link += ',';
                     link += asset.Symbol;
 
-                    _marketInfo.TryAdd(asset.Symbol, new MarketInfo()
+                    marketInfos.TryAdd(asset.Symbol, new MarketInfo()
                     {
                         Asset = asset.Symbol,
                         BrokerId = asset.BrokerId
@@ -74,7 +75,7 @@ namespace Service.CoinMarketCapReader.Jobs
                 
                 foreach (var (asset, info)  in response.Data)
                 {
-                    if (_marketInfo.TryGetValue(asset, out var marketInfo))
+                    if (marketInfos.TryGetValue(asset, out var marketInfo))
                     {
                         if(info.Urls.Website.Any())
                             marketInfo.OfficialWebsiteUrl = info.Urls.Website.First();
@@ -89,8 +90,11 @@ namespace Service.CoinMarketCapReader.Jobs
 
         private async Task UpdateMarketInfo()
         {
+            var marketInfos =
+                (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
+                    entity => entity.MarketInfo);
             var response = await GetRequest<CMCMarketInfoResponse>(CoinMarketUrl);
-            foreach (var (asset, marketInfo) in _marketInfo)
+            foreach (var (asset, marketInfo) in marketInfos)
             {
                 var info = response.Data.FirstOrDefault(p => p.Symbol == asset);
                 if (info != null)
@@ -152,9 +156,6 @@ namespace Service.CoinMarketCapReader.Jobs
         
         public async void Start()
         {
-            _marketInfo =
-                (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
-                    entity => entity.MarketInfo);
             await SetApiKeys();
             _marketInfoTimer.Start();
             _coinInfoTimer.Start();
