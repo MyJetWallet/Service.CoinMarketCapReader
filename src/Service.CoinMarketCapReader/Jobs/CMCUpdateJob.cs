@@ -51,20 +51,29 @@ namespace Service.CoinMarketCapReader.Jobs
         
         private async Task UpdateCoinInfo()
         {
+            var infos = await _marketInfoWriter.GetAsync();
+
             var marketInfos =
-                (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
-                    entity => entity.MarketInfo);
+                infos.ToDictionary(
+                    entity => entity.MarketInfo.Asset,
+                    entity => new List<MarketInfo>() {entity.MarketInfo});
+            
             var assets = _assetClient.GetAllAssets();
+            
             if (assets.Any())
             {
                 var link = CoinInfoUrl;
                 foreach (var asset in assets)
                 {
+                    var cmcAsset = asset.Symbol.Replace("test", "");
                     if (!link.EndsWith('='))
                         link += ',';
-                    link += asset.Symbol;
+                    link += cmcAsset;
 
-                    marketInfos.TryAdd(asset.Symbol, new MarketInfo()
+                    if (!marketInfos.ContainsKey(cmcAsset))
+                        marketInfos[cmcAsset] = new List<MarketInfo>();
+                    
+                    marketInfos[cmcAsset].Add(new MarketInfo()
                     {
                         Asset = asset.Symbol,
                         BrokerId = asset.BrokerId
@@ -75,14 +84,17 @@ namespace Service.CoinMarketCapReader.Jobs
                 
                 foreach (var (asset, info)  in response.Data)
                 {
-                    if (marketInfos.TryGetValue(asset, out var marketInfo))
+                    if (marketInfos.TryGetValue(asset, out var marketInfoList))
                     {
-                        if(info.Urls.Website.Any())
-                            marketInfo.OfficialWebsiteUrl = info.Urls.Website.First();
-                        if(info.Urls.TechnicalDoc.Any())
-                            marketInfo.WhitepaperUrl = info.Urls.TechnicalDoc.First();
-                        
-                        await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
+                        foreach (var marketInfo in marketInfoList)
+                        {
+                            if (info.Urls.Website.Any())
+                                marketInfo.OfficialWebsiteUrl = info.Urls.Website.First();
+                            if (info.Urls.TechnicalDoc.Any())
+                                marketInfo.WhitepaperUrl = info.Urls.TechnicalDoc.First();
+
+                            await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
+                        }
                     }
                 }
             }
@@ -93,7 +105,9 @@ namespace Service.CoinMarketCapReader.Jobs
             var marketInfos =
                 (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
                     entity => entity.MarketInfo);
+            
             var response = await GetRequest<CMCMarketInfoResponse>(CoinMarketUrl);
+            
             foreach (var (asset, marketInfo) in marketInfos)
             {
                 var info = response.Data.FirstOrDefault(p => p.Symbol == asset);
