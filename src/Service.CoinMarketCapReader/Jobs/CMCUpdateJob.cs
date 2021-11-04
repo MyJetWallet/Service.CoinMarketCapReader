@@ -51,6 +51,8 @@ namespace Service.CoinMarketCapReader.Jobs
         
         private async Task UpdateCoinInfo()
         {
+            _logger.LogInformation("Starting UpdateCoinInfo");
+            
             var infos = await _marketInfoWriter.GetAsync();
 
             var marketInfos =
@@ -98,10 +100,13 @@ namespace Service.CoinMarketCapReader.Jobs
                     }
                 }
             }
+            _logger.LogInformation("Finished UpdateCoinInfo");
         }
 
         private async Task UpdateMarketInfo()
         {
+            _logger.LogInformation("Starting UpdateMarketInfo");
+            
             var marketInfos =
                 (await _marketInfoWriter.GetAsync()).ToDictionary(entity => entity.MarketInfo.Asset,
                     entity => entity.MarketInfo);
@@ -120,6 +125,8 @@ namespace Service.CoinMarketCapReader.Jobs
                     await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
                 }
             }
+            
+            _logger.LogInformation("Finished UpdateMarketInfo");
         }
 
         public async Task UpdateKeys()
