@@ -10,6 +10,7 @@ namespace TestApp
     {
         static async Task Main(string[] args)
         {
+            await Task.CompletedTask;
             GrpcClientFactory.AllowUnencryptedHttp2 = true;
 
             Console.Write("Press enter to start");

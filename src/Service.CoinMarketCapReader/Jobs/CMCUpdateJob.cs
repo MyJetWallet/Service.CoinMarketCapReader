@@ -151,7 +151,7 @@ namespace Service.CoinMarketCapReader.Jobs
             _client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY",_apiKeys.First(pair => pair.Value).Key);
         }
 
-        private async Task SetNextKey()
+        private Task SetNextKey()
         {
             var failedKey = _apiKeys.First(pair => pair.Value == true);
             _apiKeys[failedKey.Key] = false;
@@ -165,14 +165,18 @@ namespace Service.CoinMarketCapReader.Jobs
             _client.DefaultRequestHeaders.Remove("X-CMC_PRO_API_KEY");
             _client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY",_apiKeys.First(pair => pair.Value).Key);
             _logger.LogInformation("CMC Api key {key} failed",failedKey.Key);
+            
+            return Task.CompletedTask;
         }
 
-        private async Task ResetAllKeys()
+        private Task ResetAllKeys()
         {
             foreach (var apiKey in _apiKeys)
             {
                 _apiKeys[apiKey.Key] = true;
             }
+            
+            return Task.CompletedTask;
         }
         
         public async void Start()
@@ -199,7 +203,7 @@ namespace Service.CoinMarketCapReader.Jobs
                 var responseBody = await response.Content.ReadAsStreamAsync();
                 return await JsonSerializer.DeserializeAsync<T>(responseBody);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await SetNextKey();
                 throw;
