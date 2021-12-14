@@ -64,16 +64,13 @@ namespace Service.CoinMarketCapReader.Jobs
                     entity => entity.MarketInfo.Asset,
                     entity => new List<MarketInfo>() {entity.MarketInfo});
             
-            var assets = _assetClient.GetAllAssets();
-            var markets = _referenceDictionary.GetAllMarketReferences();
+            var assets = _referenceDictionary.GetAllMarketReferences().Where(market=>market.Type == MarketType.Crypto);
             if (assets.Any())
             {
-                var cryptoAssets = assets.Where(t =>
-                    markets.Where(reference => reference.AssociateAsset == t.Symbol).All(reference=>reference.Type == MarketType.Crypto)).ToList();
                 var link = CoinInfoUrl;
-                foreach (var asset in cryptoAssets)
+                foreach (var asset in assets)
                 {
-                    var cmcAsset = asset.Symbol.Replace("test", "");
+                    var cmcAsset = asset.AssociateAsset.Replace("test", "");
                     if (!link.EndsWith('='))
                         link += ',';
                     link += cmcAsset;
@@ -83,7 +80,7 @@ namespace Service.CoinMarketCapReader.Jobs
                     
                     marketInfos[cmcAsset].Add(new MarketInfo()
                     {
-                        Asset = asset.Symbol,
+                        Asset = asset.AssociateAsset,
                         BrokerId = asset.BrokerId
                     });
                 }
