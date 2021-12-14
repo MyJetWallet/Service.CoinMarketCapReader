@@ -11,6 +11,7 @@ using MyJetWallet.Sdk.Service.Tools;
 using System.Text.Json;
 using MyNoSqlServer.Abstractions;
 using Service.AssetsDictionary.Client;
+using Service.AssetsDictionary.Domain.Models;
 using Service.CoinMarketCapReader.Domain.Models;
 using Service.CoinMarketCapReader.Domain.Models.NoSql;
 
@@ -27,19 +28,22 @@ namespace Service.CoinMarketCapReader.Jobs
         private readonly HttpClient _client;
         private readonly ILogger<CMCUpdateJob> _logger;
         private readonly IAssetsDictionaryClient _assetClient;
+        private readonly IMarketReferenceDictionaryClient _referenceDictionary;
         private readonly IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> _keyWriter;
         private readonly IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> _timerWriter;
         private readonly IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> _marketInfoWriter;
         private Dictionary<string, bool> _apiKeys = new();
         public CMCUpdateJob(ILogger<CMCUpdateJob> logger, 
             IAssetsDictionaryClient assetClient, 
-            IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> keyWriter, IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> timerWriter, IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> marketInfoWriter)
+            IMarketReferenceDictionaryClient referenceDictionaryClient,
+            IMyNoSqlServerDataWriter<CMCApiKeyNoSqlEntity> keyWriter, IMyNoSqlServerDataWriter<CMCTimerNoSqlEntity> timerWriter, IMyNoSqlServerDataWriter<MarketInfoNoSqlEntity> marketInfoWriter, IMarketReferenceDictionaryClient referenceDictionary)
         {
             _logger = logger;
             _assetClient = assetClient;
             _keyWriter = keyWriter;
             _timerWriter = timerWriter;
             _marketInfoWriter = marketInfoWriter;
+            _referenceDictionary = referenceDictionary;
             _marketInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromSeconds(Program.Settings.MarketInfoTimerInSec), _logger, UpdateMarketInfo).DisableTelemetry();
             _coinInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.CoinInfoTimerInMin), _logger, UpdateCoinInfo).DisableTelemetry();
             _apiKeyTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromDays(1), _logger, ResetAllKeys).DisableTelemetry();
@@ -61,11 +65,13 @@ namespace Service.CoinMarketCapReader.Jobs
                     entity => new List<MarketInfo>() {entity.MarketInfo});
             
             var assets = _assetClient.GetAllAssets();
-            
+            var markets = _referenceDictionary.GetAllMarketReferences();
             if (assets.Any())
             {
+                var cryptoAssets = assets.Where(t =>
+                    markets.Where(reference => reference.AssociateAsset == t.Symbol).All(reference=>reference.Type == MarketType.Crypto)).ToList();
                 var link = CoinInfoUrl;
-                foreach (var asset in assets.Where(t=>t.Symbol != "ROSI" && t.Symbol != "AndreyT" && t.Symbol != "CIE" && t.Symbol != "CIG" && t.Symbol != "CISC" )) //TODO: Filter out indexes
+                foreach (var asset in cryptoAssets)
                 {
                     var cmcAsset = asset.Symbol.Replace("test", "");
                     if (!link.EndsWith('='))
