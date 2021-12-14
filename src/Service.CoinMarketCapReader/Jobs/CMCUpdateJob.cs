@@ -65,7 +65,7 @@ namespace Service.CoinMarketCapReader.Jobs
             if (assets.Any())
             {
                 var link = CoinInfoUrl;
-                foreach (var asset in assets)
+                foreach (var asset in assets.Where(t=>t.Symbol != "ROSI" && t.Symbol != "AndreyT" && t.Symbol != "CIE" && t.Symbol != "CIG" && t.Symbol != "CISC" )) //TODO: Filter out indexes
                 {
                     var cmcAsset = asset.Symbol.Replace("test", "");
                     if (!link.EndsWith('='))
@@ -203,8 +203,9 @@ namespace Service.CoinMarketCapReader.Jobs
                 var responseBody = await response.Content.ReadAsStreamAsync();
                 return await JsonSerializer.DeserializeAsync<T>(responseBody);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "When getting CoinMarketCap info");
                 await SetNextKey();
                 throw;
             }
