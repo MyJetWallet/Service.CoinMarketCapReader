@@ -29,6 +29,7 @@ namespace Service.CoinMarketCapReader.Settings
         [YamlProperty("CoinMarketCapReader.MarketInfoTimerInSec")]
         public int MarketInfoTimerInSec { get; set; }
 
-
+        [YamlProperty("CoinMarketCapReader.MessageTemplatesGrpcServiceUrl")]
+        public string MessageTemplatesGrpcServiceUrl { get; set; }
     }
 }

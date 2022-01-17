@@ -5,6 +5,7 @@ using MyJetWallet.Sdk.NoSql;
 using Service.AssetsDictionary.Client;
 using Service.CoinMarketCapReader.Domain.Models.NoSql;
 using Service.CoinMarketCapReader.Jobs;
+using Service.MessageTemplates.Client;
 
 namespace Service.CoinMarketCapReader.Modules
 {
@@ -25,6 +26,8 @@ namespace Service.CoinMarketCapReader.Modules
             
             builder.RegisterMyNoSqlWriter<CMCTimerNoSqlEntity>(
                 Program.ReloadedSettings(e => e.MyNoSqlWriterUrl), CMCTimerNoSqlEntity.TableName);
+            
+            builder.RegisterMessageTemplatesClient(Program.Settings.MessageTemplatesGrpcServiceUrl);
         }
     }
 }

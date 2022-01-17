@@ -15,5 +15,11 @@ namespace Service.CoinMarketCapReader.Grpc
        
         [OperationContract]
         Task UpdateMarketInfo(MarketInfoUpdateMessage request);
+        
+        [OperationContract]
+        Task<OperationResponse> CreateMarketInfo(MarketInfoUpdateMessage request);
+
+        [OperationContract]
+        Task<OperationResponse> DeleteMarketInfo(MarketInfoDeleteRequest request);
     }
 }
