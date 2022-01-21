@@ -21,9 +21,12 @@ namespace Service.CoinMarketCapReader.Jobs
     { 
         private const string CoinInfoUrl = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?symbol=";
         private const string CoinMarketUrl = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest";
+        private const string CoinGlobalUrl = "https://pro-api.coinmarketcap.com/v1/global-metrics/quotes/latest";
+
         private readonly MyTaskTimer _marketInfoTimer;
         private readonly MyTaskTimer _coinInfoTimer;
         private readonly MyTaskTimer _apiKeyTimer;
+        private readonly MyTaskTimer _globalInfoTimer;
 
         private readonly HttpClient _client;
         private readonly ILogger<CMCUpdateJob> _logger;
@@ -47,6 +50,7 @@ namespace Service.CoinMarketCapReader.Jobs
             _marketInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromSeconds(Program.Settings.MarketInfoTimerInSec), _logger, UpdateMarketInfo).DisableTelemetry();
             _coinInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromMinutes(Program.Settings.CoinInfoTimerInMin), _logger, UpdateCoinInfo).DisableTelemetry();
             _apiKeyTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromDays(1), _logger, ResetAllKeys).DisableTelemetry();
+            _globalInfoTimer = new MyTaskTimer(nameof(CMCUpdateJob), TimeSpan.FromSeconds(Program.Settings.MarketInfoTimerInSec), _logger, UpdateGlobalInfo).DisableTelemetry();
 
             _client = new HttpClient();
             _client.DefaultRequestHeaders.Accept.Add(
@@ -125,12 +129,39 @@ namespace Service.CoinMarketCapReader.Jobs
                     marketInfo.Supply = info.TotalSupply;
                     marketInfo.MarketCap = info.Quote.QuoteValues.MarketCap;
                     marketInfo.Volume24 = info.Quote.QuoteValues.Volume24;
+                    marketInfo.PercentChange1H = info.Quote.QuoteValues.PercentChange1H;;
+                    marketInfo.PercentChange24H = info.Quote.QuoteValues.PercentChange24H;;
+                    marketInfo.PercentChange7d = info.Quote.QuoteValues.PercentChange7d;;
+                    marketInfo.PercentChange30d = info.Quote.QuoteValues.PercentChange30d;;
+                    marketInfo.PercentChange60d = info.Quote.QuoteValues.PercentChange60d;;
+                    marketInfo.PercentChange90d = info.Quote.QuoteValues.PercentChange90d;;
+                    marketInfo.VolumeChange24H = info.Quote.QuoteValues.VolumeChange24H;;
                     await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
                 }
             }
             
             _logger.LogInformation("Finished UpdateMarketInfo");
         }
+        
+        private async Task UpdateGlobalInfo()
+        {
+            _logger.LogInformation("Starting UpdateGlobalInfo");
+            var response = await GetRequest<CMCGlobalMetricsResponse>(CoinGlobalUrl);
+            
+            var marketInfo = new MarketInfo
+            {
+                Asset = "Total",
+                BrokerId = Program.Settings.DefaultBrokerId,
+                MarketCap = response.Data.Quote.Qoute.TotalMarketCap,
+                Volume24 = response.Data.Quote.Qoute.TotalVolume24h,
+                VolumeChange24H = response.Data.Quote.Qoute.TotalVolume24hYesterdayPercentageChange,
+                MarketCapChange24H = response.Data.Quote.Qoute.TotalMarketCapYesterdayPercentageChange
+            };      
+                    
+            await _marketInfoWriter.InsertOrReplaceAsync(MarketInfoNoSqlEntity.Create(marketInfo));
+            _logger.LogInformation("Finished UpdateGlobalInfo");
+        }
+
 
         public async Task UpdateKeys()
         {
@@ -154,7 +185,7 @@ namespace Service.CoinMarketCapReader.Jobs
             _client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY",_apiKeys.First(pair => pair.Value).Key);
         }
 
-        private Task SetNextKey()
+        private Task SetNextKey() 
         {
             var failedKey = _apiKeys.First(pair => pair.Value == true);
             _apiKeys[failedKey.Key] = false;
@@ -187,13 +218,15 @@ namespace Service.CoinMarketCapReader.Jobs
             await SetApiKeys();
             _marketInfoTimer.Start();
             _coinInfoTimer.Start();
+            _globalInfoTimer.Start();
             _apiKeyTimer.Start();
         }
 
         public void Dispose()
         {
             _marketInfoTimer.Dispose();
-            _coinInfoTimer.Start();
+            _coinInfoTimer.Dispose();
+            _globalInfoTimer.Dispose();
             _apiKeyTimer.Dispose();
         }
 

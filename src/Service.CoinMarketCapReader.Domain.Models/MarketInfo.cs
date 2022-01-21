@@ -12,6 +12,14 @@ namespace Service.CoinMarketCapReader.Domain.Models
         public double Price { get; set; }
         public string AboutLessTemplateId { get; set; }
         public string AboutMoreTemplateId { get; set; }
+        public double VolumeChange24H { get; set; }
+        public double PercentChange1H { get; set; }
+        public double PercentChange24H { get; set; }
+        public double PercentChange7d { get; set; }
+        public double PercentChange30d { get; set; }
+        public double PercentChange60d { get; set; }
+        public double PercentChange90d { get; set; }
+        public double MarketCapChange24H { get; set; }
 
     }
 }

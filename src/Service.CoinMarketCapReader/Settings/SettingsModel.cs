@@ -31,5 +31,8 @@ namespace Service.CoinMarketCapReader.Settings
 
         [YamlProperty("CoinMarketCapReader.MessageTemplatesGrpcServiceUrl")]
         public string MessageTemplatesGrpcServiceUrl { get; set; }
+        
+        [YamlProperty("CoinMarketCapReader.DefaultBrokerId")]
+        public string DefaultBrokerId { get; set; }
     }
 }
