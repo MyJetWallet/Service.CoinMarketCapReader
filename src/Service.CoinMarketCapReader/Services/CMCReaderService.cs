@@ -68,7 +68,18 @@ namespace Service.CoinMarketCapReader.Services
                     entity.MarketInfo.WhitepaperUrl = request.WhitepaperUrl; 
                 if (!string.IsNullOrEmpty(request.OfficialWebsiteUrl))
                     entity.MarketInfo.OfficialWebsiteUrl = request.OfficialWebsiteUrl;
+                if (!string.IsNullOrEmpty(request.AboutLessTemplateId))
+                {
+                    entity.MarketInfo.AboutLessTemplateId = request.AboutLessTemplateId;
+                    await EnsureTemplateAreCreated(request.AboutLessTemplateId);
+                }
 
+                if (!string.IsNullOrEmpty(request.AboutMoreTemplateId))
+                {
+                    entity.MarketInfo.AboutMoreTemplateId = request.AboutMoreTemplateId;
+                    await EnsureTemplateAreCreated(request.AboutMoreTemplateId);
+                }
+                
                 if (string.IsNullOrEmpty(entity.MarketInfo.AboutLessTemplateId))
                 {
                     var aboutLess = $"{request.Asset}-about-less".ToLower();
