@@ -17,7 +17,7 @@ namespace Service.CoinMarketCapReader.Client
             builder.RegisterInstance(factory.GetCMCReaderService()).As<ICMCReaderService>().SingleInstance();
         }
 
-        public static void RegisterCoinMarketCapNoSqlReader(this ContainerBuilder builder, MyNoSqlTcpClient client)
+        public static void RegisterCoinMarketCapNoSqlReader(this ContainerBuilder builder, IMyNoSqlSubscriber client)
         {
             builder.RegisterMyNoSqlReader<MarketInfoNoSqlEntity>(client,
                 MarketInfoNoSqlEntity.TableName);
