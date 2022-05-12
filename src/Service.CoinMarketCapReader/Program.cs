@@ -37,7 +37,7 @@ namespace Service.CoinMarketCapReader
             Settings = SettingsReader.GetSettings<SettingsModel>(SettingsFileName);
 
             Console.WriteLine("Creating logger factory ...");
-            using var loggerFactory = LogConfigurator.ConfigureElk("MyJetWallet", Settings.SeqServiceUrl, Settings.ElkLogs);
+            using var loggerFactory = LogConfigurator.ConfigureElk_v2("MyJetWallet", Settings.SeqServiceUrl, Settings.ElkLogs);
             Console.WriteLine("Logger factory is created");
             
             var logger = loggerFactory.CreateLogger<Program>();
