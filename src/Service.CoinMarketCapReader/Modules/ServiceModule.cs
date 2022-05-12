@@ -15,7 +15,7 @@ namespace Service.CoinMarketCapReader.Modules
         {
             builder.RegisterType<CMCUpdateJob>().AsSelf().AutoActivate().SingleInstance();
 
-            var noSqlClient = builder.CreateNoSqlClient(Program.ReloadedSettings(e => e.MyNoSqlReaderHostPort));
+            var noSqlClient = builder.CreateNoSqlClient(Program.Settings.MyNoSqlReaderHostPort, Program.LogFactory);
             builder.RegisterAssetsDictionaryClients(noSqlClient);
 
             builder.RegisterMyNoSqlWriter<CMCApiKeyNoSqlEntity>(Program.ReloadedSettings(e => e.MyNoSqlWriterUrl),
